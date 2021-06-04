@@ -2,6 +2,7 @@
 const express = require("express");
 const path = require("path");
 const mongoose = require("mongoose");
+const ejsMate = require("ejs-mate");
 const methodOverride = require("method-override");
 const Campground = require("./models/campground");
 
@@ -20,6 +21,9 @@ db.once("open", () => {
 });
 
 const app = express();
+
+//To make boilerplates for our pages
+app.engine("ejs", ejsMate);
 
 //Enable ejs and paths for the ejs files in the views directory
 app.set("view engine", "ejs");
