@@ -3,11 +3,15 @@ const express = require("express");
 const path = require("path");
 const mongoose = require("mongoose");
 const ejsMate = require("ejs-mate");
-const { campgroundSchema } = require("./schemas");
+
+//Importing the Joi validating schema for server-side validation
+const { campgroundSchema, reviewSchema } = require("./schemas");
+
 const methodOverride = require("method-override");
 const tryCatchForAsync = require("./utils/tryCatchForAsync");
 const ExpressError = require("./utils/ExpressError");
 const Campground = require("./models/campground");
+const Review = require("./models/review");
 
 //Connect to the mongoDB database
 mongoose.connect("mongodb://localhost:27017/yelp-camp", {
@@ -42,6 +46,16 @@ app.use(methodOverride("_method"));
 const validateCampground = (req, res, next) => {
   //Check if the user submitted correct Schema or not
   const { error } = campgroundSchema.validate(req.body);
+  if (error) {
+    const msg = error.details.map((el) => el.message).join(",");
+    throw new ExpressError(msg, 400);
+  } else {
+    next();
+  }
+};
+
+const validateReview = (req, res, next) => {
+  const { error } = reviewSchema.validate(req.body);
   if (error) {
     const msg = error.details.map((el) => el.message).join(",");
     throw new ExpressError(msg, 400);
@@ -95,7 +109,9 @@ app.post(
 app.get(
   "/campgrounds/:id",
   tryCatchForAsync(async (req, res) => {
-    const campground = await Campground.findById(req.params.id);
+    const campground = await Campground.findById(req.params.id).populate(
+      "reviews"
+    );
     res.render("campgrounds/show.ejs", { campground });
   })
 );
@@ -124,12 +140,48 @@ app.put(
 );
 
 //Route to delete a campground
+//Note the Campground.findByIdAndDelete(id) will trigger the middleware findOneAndDelete defined in the campground.js file
+//So if we delete a campground all the reviews associated with that campground will be deleted
+//Refer to mongoose doc for this
 app.delete(
   "/campgrounds/:id",
   tryCatchForAsync(async (req, res) => {
     const { id } = req.params;
     const campground = await Campground.findByIdAndDelete(id);
     res.redirect("/campgrounds");
+  })
+);
+
+//Route to add a review to a campground
+//validateReview is the middleware function for server-side validation of review object
+app.post(
+  "/campgrounds/:id/reviews",
+  validateReview,
+  tryCatchForAsync(async (req, res) => {
+    const campground = await Campground.findById(req.params.id);
+    //If you look at show.ejs we have defined name as review[body] so review object will be sent from the form which is parsed here
+    const review = new Review(req.body.review);
+    //Add the captured review into the campground, now campground and reviews are connected
+    //The campground.reviews will have the objectId of the review
+    campground.reviews.push(review);
+    await review.save();
+    await campground.save();
+    res.redirect(`/campgrounds/${campground._id}`);
+  })
+);
+
+//Route to delete a review
+//We want to remove the link to the review for each campground and the review itself so we have campgroundId and reviewId
+app.delete(
+  "/campgrounds/:id/reviews/:reviewId",
+  tryCatchForAsync(async (req, res) => {
+    const { id, reviewId } = req.params;
+    //The pull operator removes from an existing array any value that matches the Id
+    //Here from the reviews array of Campground object we are removing any review that matches the reviewId
+    await Campground.findByIdAndUpdate(id, { $pull: { reviews: reviewId } });
+    //This will delete the actual review in the review collection
+    await Review.findByIdAndDelete(reviewId);
+    res.redirect(`/campgrounds/${id}`);
   })
 );
 
