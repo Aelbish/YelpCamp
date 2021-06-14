@@ -3,21 +3,21 @@ const express = require("express");
 const path = require("path");
 const mongoose = require("mongoose");
 const ejsMate = require("ejs-mate");
-
-//Importing the Joi validating schema for server-side validation
-const { campgroundSchema, reviewSchema } = require("./schemas");
-
+const session = require("express-session");
+const flash = require("connect-flash");
 const methodOverride = require("method-override");
-const tryCatchForAsync = require("./utils/tryCatchForAsync");
 const ExpressError = require("./utils/ExpressError");
-const Campground = require("./models/campground");
-const Review = require("./models/review");
+
+//Route objects
+const campgrounds = require("./routes/campgrounds");
+const reviews = require("./routes/reviews");
 
 //Connect to the mongoDB database
 mongoose.connect("mongodb://localhost:27017/yelp-camp", {
   useNewUrlParser: true,
   useCreateIndex: true,
   useUnifiedTopology: true,
+  useFindAndModify: false,
 });
 
 //Handle connection error to mongoDB database
@@ -38,152 +38,43 @@ app.set("views", path.join(__dirname, "views"));
 
 //To parse req.body from the POST method
 app.use(express.urlencoded({ extended: true }));
-
 //To use PUT method in the form by overriding POST method
 app.use(methodOverride("_method"));
-
-//Selective middleware function to validate data in the server side
-const validateCampground = (req, res, next) => {
-  //Check if the user submitted correct Schema or not
-  const { error } = campgroundSchema.validate(req.body);
-  if (error) {
-    const msg = error.details.map((el) => el.message).join(",");
-    throw new ExpressError(msg, 400);
-  } else {
-    next();
-  }
+//To use the public folder to serve static files such as images, CSS files, and JS files
+app.use(express.static(path.join(__dirname, "public")));
+//To create sessions and use flash
+const sessionConfig = {
+  secret: "thisshouldbeabettersecret",
+  resave: false,
+  saveUninitialized: true,
+  cookie: {
+    httpOnly: true,
+    expires: Date.now() + 1000 * 60 * 60 * 24 * 7,
+    maxAge: 1000 * 60 * 60 * 24 * 7,
+  },
 };
+app.use(session(sessionConfig));
+//To use flash
+app.use(flash());
 
-const validateReview = (req, res, next) => {
-  const { error } = reviewSchema.validate(req.body);
-  if (error) {
-    const msg = error.details.map((el) => el.message).join(",");
-    throw new ExpressError(msg, 400);
-  } else {
-    next();
-  }
-};
+//Middleware that will pass the req.flash object for each route if there is one
+//Instead of passing req.flash while rendering or redirecting to a .ejs we have defined a middleware
+app.use((req, res, next) => {
+  //So sucess and error will be locally available to all ejs files
+  res.locals.success = req.flash("success");
+  res.locals.error = req.flash("error");
+  next();
+});
+
+//ROUTES
+//Use campground route object and prefix it with /campgrounds
+app.use("/campgrounds", campgrounds);
+app.use("/campgrounds/:id/reviews", reviews);
 
 //Route for homepage
 app.get("/", (req, res) => {
   res.render("home.ejs");
 });
-
-//We used this initally to make our first object in the database, then we used seedHelpers.js
-// app.get("/makecampground", async (req, res) => {
-//   const camp = new Campground({
-//     title: "My Backyard",
-//     description: "cheap camping",
-//   });
-//   await camp.save();
-//   res.send(camp);
-// });
-
-//Route for list of campgrounds
-app.get(
-  "/campgrounds",
-  tryCatchForAsync(async (req, res) => {
-    const campgrounds = await Campground.find({});
-    res.render("campgrounds/index.ejs", { campgrounds });
-  })
-);
-
-//Route to create a new campground, this should be fore /campgrounds/:id or else /new will be identified as an id
-app.get("/campgrounds/new", (req, res) => {
-  res.render("campgrounds/new.ejs");
-});
-
-//Route to add a new campground to Mongo
-//validateCampground is a middleware function
-app.post(
-  "/campgrounds",
-  validateCampground,
-  tryCatchForAsync(async (req, res, next) => {
-    const campground = new Campground(req.body.campground);
-    await campground.save();
-    res.redirect(`/campgrounds/${campground._id}`);
-  })
-);
-
-//Route to show details of a campground
-app.get(
-  "/campgrounds/:id",
-  tryCatchForAsync(async (req, res) => {
-    const campground = await Campground.findById(req.params.id).populate(
-      "reviews"
-    );
-    res.render("campgrounds/show.ejs", { campground });
-  })
-);
-
-//Route to render edit page for a campground
-app.get(
-  "/campgrounds/:id/edit",
-  tryCatchForAsync(async (req, res) => {
-    const campground = await Campground.findById(req.params.id);
-    res.render("campgrounds/edit.ejs", { campground });
-  })
-);
-
-//Route to update a campground
-//validateCampground is a middleware function
-app.put(
-  "/campgrounds/:id",
-  validateCampground,
-  tryCatchForAsync(async (req, res) => {
-    const { id } = req.params;
-    const campground = await Campground.findByIdAndUpdate(id, {
-      ...req.body.campground,
-    });
-    res.redirect(`/campgrounds/${campground._id}`);
-  })
-);
-
-//Route to delete a campground
-//Note the Campground.findByIdAndDelete(id) will trigger the middleware findOneAndDelete defined in the campground.js file
-//So if we delete a campground all the reviews associated with that campground will be deleted
-//Refer to mongoose doc for this
-app.delete(
-  "/campgrounds/:id",
-  tryCatchForAsync(async (req, res) => {
-    const { id } = req.params;
-    const campground = await Campground.findByIdAndDelete(id);
-    res.redirect("/campgrounds");
-  })
-);
-
-//Route to add a review to a campground
-//validateReview is the middleware function for server-side validation of review object
-app.post(
-  "/campgrounds/:id/reviews",
-  validateReview,
-  tryCatchForAsync(async (req, res) => {
-    const campground = await Campground.findById(req.params.id);
-    //If you look at show.ejs we have defined name as review[body] so review object will be sent from the form which is parsed here
-    const review = new Review(req.body.review);
-    //Add the captured review into the campground, now campground and reviews are connected
-    //The campground.reviews will have the objectId of the review
-    campground.reviews.push(review);
-    await review.save();
-    await campground.save();
-    res.redirect(`/campgrounds/${campground._id}`);
-  })
-);
-
-//Route to delete a review
-//We want to remove the link to the review for each campground and the review itself so we have campgroundId and reviewId
-app.delete(
-  "/campgrounds/:id/reviews/:reviewId",
-  tryCatchForAsync(async (req, res) => {
-    const { id, reviewId } = req.params;
-    //The pull operator removes from an existing array any value that matches the Id
-    //Here from the reviews array of Campground object we are removing any review that matches the reviewId
-    await Campground.findByIdAndUpdate(id, { $pull: { reviews: reviewId } });
-    //This will delete the actual review in the review collection
-    await Review.findByIdAndDelete(reviewId);
-    res.redirect(`/campgrounds/${id}`);
-  })
-);
 
 //Note the order of this code matters
 //If none of the above routes are called then this will be executed
@@ -206,3 +97,13 @@ app.use((err, req, res, next) => {
 app.listen(3000, () => {
   console.log("Listening in port 3000");
 });
+
+//We used this initally to make our first object in the database, then we used seedHelpers.js
+// app.get("/makecampground", async (req, res) => {
+//   const camp = new Campground({
+//     title: "My Backyard",
+//     description: "cheap camping",
+//   });
+//   await camp.save();
+//   res.send(camp);
+// });
