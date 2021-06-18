@@ -7,10 +7,14 @@ const session = require("express-session");
 const flash = require("connect-flash");
 const methodOverride = require("method-override");
 const ExpressError = require("./utils/ExpressError");
+const passport = require("passport");
+const LocalStrategy = require("passport-local");
+const User = require("./models/user");
 
 //Route objects
-const campgrounds = require("./routes/campgrounds");
-const reviews = require("./routes/reviews");
+const campgroundRoutes = require("./routes/campgrounds");
+const reviewRoutes = require("./routes/reviews");
+const userRoutes = require("./routes/users");
 
 //Connect to the mongoDB database
 mongoose.connect("mongodb://localhost:27017/yelp-camp", {
@@ -57,9 +61,21 @@ app.use(session(sessionConfig));
 //To use flash
 app.use(flash());
 
+//middlewares for passport, app.use(session) should come before app.use(passport.session())
+app.use(passport.initialize());
+app.use(passport.session());
+//The authenticate method is added in the static methods for User because of passport
+passport.use(new LocalStrategy(User.authenticate()));
+//Store in session
+passport.serializeUser(User.serializeUser());
+//Remove from session
+passport.deserializeUser(User.deserializeUser());
+
 //Middleware that will pass the req.flash object for each route if there is one
 //Instead of passing req.flash while rendering or redirecting to a .ejs we have defined a middleware
 app.use((req, res, next) => {
+  //passport also stores user in req, we manually add this to local.currentUser
+  res.locals.currentUser = req.user;
   //So sucess and error will be locally available to all ejs files
   res.locals.success = req.flash("success");
   res.locals.error = req.flash("error");
@@ -68,8 +84,9 @@ app.use((req, res, next) => {
 
 //ROUTES
 //Use campground route object and prefix it with /campgrounds
-app.use("/campgrounds", campgrounds);
-app.use("/campgrounds/:id/reviews", reviews);
+app.use("/campgrounds", campgroundRoutes);
+app.use("/campgrounds/:id/reviews", reviewRoutes);
+app.use("/", userRoutes);
 
 //Route for homepage
 app.get("/", (req, res) => {

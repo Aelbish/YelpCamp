@@ -5,6 +5,7 @@ const router = express.Router();
 
 //Importing the Joi validating schema for server-side validation
 const { campgroundSchema } = require("../schemas");
+const { isLoggedIn } = require("../middleware");
 
 const Campground = require("../models/campground");
 
@@ -33,7 +34,8 @@ router.get(
 );
 
 //Route to create a new campground, this should be fore /campgrounds/:id or else /new will be identified as an id
-router.get("/new", (req, res) => {
+//isLoggedIn is a middleware defined in middleware.js with the the help of passport
+router.get("/new", isLoggedIn, (req, res) => {
   res.render("campgrounds/new.ejs");
 });
 
@@ -41,6 +43,7 @@ router.get("/new", (req, res) => {
 //validateCampground is a middleware function
 router.post(
   "/",
+  isLoggedIn,
   validateCampground,
   tryCatchForAsync(async (req, res, next) => {
     const campground = new Campground(req.body.campground);
@@ -68,6 +71,7 @@ router.get(
 //Route to render edit page for a campground
 router.get(
   "/:id/edit",
+  isLoggedIn,
   tryCatchForAsync(async (req, res) => {
     const campground = await Campground.findById(req.params.id);
     if (!campground) {
@@ -82,6 +86,7 @@ router.get(
 //validateCampground is a middleware function
 router.put(
   "/:id",
+  isLoggedIn,
   validateCampground,
   tryCatchForAsync(async (req, res) => {
     const { id } = req.params;
@@ -99,6 +104,7 @@ router.put(
 //Refer to mongoose doc for this
 router.delete(
   "/:id",
+  isLoggedIn,
   tryCatchForAsync(async (req, res) => {
     const { id } = req.params;
     const campground = await Campground.findByIdAndDelete(id);
