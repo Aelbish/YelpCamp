@@ -2,6 +2,12 @@ const express = require("express");
 //Here we do not need mergeParams option becuase all the param (id) is here only, not in app.js
 //But this is not the case in reviews.js routes
 const router = express.Router();
+
+//npm i multer, handles image upload, enctype="multipart/form-data"
+const multer = require("multer");
+const { storage } = require("../cloudinary");
+const upload = multer({ storage });
+
 //Controllers
 const campgrounds = require("../controllers/campgrounds");
 
@@ -19,6 +25,8 @@ router
   //validateCampground is a middleware function
   .post(
     isLoggedIn,
+    //image is the atrribute name="image" in new.ejs for the image
+    upload.array("image"),
     validateCampground,
     tryCatchForAsync(campgrounds.createCampground)
   );
@@ -36,6 +44,7 @@ router
   .put(
     isLoggedIn,
     isAuthor,
+    upload.array("image"),
     validateCampground,
     tryCatchForAsync(campgrounds.updateCampground)
   )
