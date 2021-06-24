@@ -1,11 +1,12 @@
 //All the functions to render pages for campgrounds route
 const Campground = require("../models/campground");
-const { cloudinary } = require("../cloudinary");
 
 //npm i @mapbox/mapbox-sdk
 const mbxGeocoding = require("@mapbox/mapbox-sdk/services/geocoding");
 const mapBoxToken = process.env.MAPBOX_TOKEN;
 const geocoder = mbxGeocoding({ accessToken: mapBoxToken });
+
+const { cloudinary } = require("../cloudinary");
 
 module.exports.index = async (req, res) => {
   const campgrounds = await Campground.find({});
