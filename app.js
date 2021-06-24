@@ -8,6 +8,8 @@ const path = require("path");
 const mongoose = require("mongoose");
 const ejsMate = require("ejs-mate");
 const session = require("express-session");
+//To connect session to our MongoDB cloud
+const mongoDBStore = require("connect-mongo");
 const flash = require("connect-flash");
 const methodOverride = require("method-override");
 const ExpressError = require("./utils/ExpressError");
@@ -24,8 +26,10 @@ const campgroundRoutes = require("./routes/campgrounds");
 const reviewRoutes = require("./routes/reviews");
 const userRoutes = require("./routes/users");
 
+const dbUrl = "mongodb://localhost:27017/yelp-camp";
+//Local: "mongodb://localhost:27017/yelp-camp"
 //Connect to the mongoDB database
-mongoose.connect("mongodb://localhost:27017/yelp-camp", {
+mongoose.connect(dbUrl, {
   useNewUrlParser: true,
   useCreateIndex: true,
   useUnifiedTopology: true,
@@ -57,6 +61,12 @@ app.use(express.static(path.join(__dirname, "public")));
 
 app.use(mongoSanitize());
 
+// const store = mongoDBStore.create({
+//   url: dbUrl,
+//   secret: "thisshouldbeabettersecret!",
+//   touchAfter: 24 * 60 * 60,
+// });
+
 //To create sessions and use flash
 const sessionConfig = {
   //our custom name for the cookie
@@ -64,6 +74,14 @@ const sessionConfig = {
   secret: "thisshouldbeabettersecret",
   resave: false,
   saveUninitialized: true,
+  //store the session in our MongoDB cloud
+  //this will create a new collection called sessions just like users/reviews/campgrounds automatically
+  //before the sessions were stored in the browser memoryStore, but now it is stored in our database
+  store: mongoDBStore.create({
+    mongoUrl: dbUrl,
+    secret: "thisshouldbeabettersecret",
+    touchAfter: 24 * 60 * 60,
+  }),
   cookie: {
     httpOnly: true,
     //https
@@ -72,6 +90,11 @@ const sessionConfig = {
     maxAge: 1000 * 60 * 60 * 24 * 7,
   },
 };
+
+sessionConfig.store.on("error", function (e) {
+  console.log("SESSION STORE ERROR", e);
+});
+
 app.use(session(sessionConfig));
 //To use flash
 app.use(flash());
@@ -81,6 +104,7 @@ app.use(helmet());
 //Helmet configurations for CSP(Content-Security-Policy)
 const scriptSrcUrls = [
   "https://cdn.jsdelivr.net/npm/bootstrap@5.0.1/dist/css/bootstrap.min.css",
+  "https://stackpath.bootstrapcdn.com/",
   "https://api.tiles.mapbox.com/",
   "https://api.mapbox.com/",
   "https://kit.fontawesome.com/",
@@ -90,6 +114,7 @@ const scriptSrcUrls = [
 const styleSrcUrls = [
   "https://kit-free.fontawesome.com/",
   "https://cdn.jsdelivr.net/npm/bootstrap@5.0.1/dist/css/bootstrap.min.css",
+  "https://stackpath.bootstrapcdn.com/",
   "https://api.mapbox.com/",
   "https://api.tiles.mapbox.com/",
   "https://fonts.googleapis.com/",
