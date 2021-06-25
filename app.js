@@ -26,7 +26,7 @@ const campgroundRoutes = require("./routes/campgrounds");
 const reviewRoutes = require("./routes/reviews");
 const userRoutes = require("./routes/users");
 
-const dbUrl = "mongodb://localhost:27017/yelp-camp";
+const dbUrl = process.env.DB_URL || "mongodb://localhost:27017/yelp-camp";
 //Local: "mongodb://localhost:27017/yelp-camp"
 //Connect to the mongoDB database
 mongoose.connect(dbUrl, {
@@ -61,17 +61,13 @@ app.use(express.static(path.join(__dirname, "public")));
 
 app.use(mongoSanitize());
 
-// const store = mongoDBStore.create({
-//   url: dbUrl,
-//   secret: "thisshouldbeabettersecret!",
-//   touchAfter: 24 * 60 * 60,
-// });
+const secret = process.env.SECRET || "thisshouldbeabettersecret";
 
 //To create sessions and use flash
 const sessionConfig = {
   //our custom name for the cookie
   name: "xor",
-  secret: "thisshouldbeabettersecret",
+  secret,
   resave: false,
   saveUninitialized: true,
   //store the session in our MongoDB cloud
@@ -79,7 +75,7 @@ const sessionConfig = {
   //before the sessions were stored in the browser memoryStore, but now it is stored in our database
   store: mongoDBStore.create({
     mongoUrl: dbUrl,
-    secret: "thisshouldbeabettersecret",
+    secret,
     touchAfter: 24 * 60 * 60,
   }),
   cookie: {
