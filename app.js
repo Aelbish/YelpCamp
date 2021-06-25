@@ -193,9 +193,11 @@ app.use((err, req, res, next) => {
   res.status(statusCode).render("error.ejs", { err });
 });
 
+const port = process.env.PORT || 3000;
+
 //Start local server at port 3000
-app.listen(3000, () => {
-  console.log("Listening in port 3000");
+app.listen(port, () => {
+  console.log(`Listening in port ${port}`);
 });
 
 //We used this initally to make our first object in the database, then we used seedHelpers.js
