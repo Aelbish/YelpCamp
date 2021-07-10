@@ -1,5 +1,4 @@
 # YelpCamp
-Link: https://guarded-ravine-57736.herokuapp.com/
 This is a project called YelpCamp created from Web Developer Boot Camp by Colt Steele. 
 This website allows people to browse through various campgrounds. 
 Each campground has description, images, location, and reviews. 
